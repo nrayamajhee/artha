@@ -1,7 +1,7 @@
 [package]
-name = "neuralnet"
-version = "0.1.0"
 authors = ["nishan"]
 edition = "2018"
-
+name = "artha"
+version = "0.1.0"
 [dependencies]
+rand = "*"
