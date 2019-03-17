@@ -1,8 +1,15 @@
 [package]
-authors = ["nishan"]
-edition = "2018"
 name = "artha"
+authors = ["nishan"]
 version = "0.1.0"
+description = "A dead simple neural network built as a learning exercise"
+homepage = "https://gitlab.com/nrayamajhee/artha"
+documentation = "https://docs.rs/artha/"
+keywords = ["neural", "network"]
+categories = ["science"]
+edition = "2018"
+license = "MIT/Apache-2.0"
+
 [dependencies]
 pbr = "*"
 rand = "*"
