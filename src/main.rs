@@ -6,7 +6,7 @@ use artha::{
         find_max,
     }
 };
-use ndarray::{array, Array2};
+use ndarray::array;
 fn main() {
     let mut xs = array![[2.,9.],[1.,5.],[3.,6.]];
     normaize_val(find_max(&xs), &mut xs);
