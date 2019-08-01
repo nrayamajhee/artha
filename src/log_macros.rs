@@ -11,7 +11,7 @@ macro_rules! debug{
             if let Some(s) = (&$x as &std::any::Any).downcast_ref::<&str>() {
                 print!("{}", s);
             } else {
-                print!("{:?}", $x);
+                print!("{:#?}", $x);
             }
             )*
             println!("");
@@ -31,7 +31,7 @@ macro_rules! debugln{
             if let Some(s) = (&$x as &std::any::Any).downcast_ref::<&str>() {
                 println!("{}", s);
             } else {
-                println!("{:?}", $x);
+                println!("{:#?}", $x);
             }
             )*
         }

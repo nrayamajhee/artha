@@ -1,7 +1,7 @@
  _A dead simple neural network built as a learning exercise._
  
  # Getting Started 
- ```
+ ```rust
  use artha::{
      NeuralNetwork,
      neural_net::{

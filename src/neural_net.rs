@@ -1,76 +1,104 @@
 //! A dead simple Neural Network
  
-use ndarray::{Array, Array2};
+use ndarray::{Array, Array1, Array2};
 use pbr::ProgressBar;
 use ndarray_rand::RandomExt;
-use rand::distributions::Normal;
-
+use rand::distributions::Uniform;
 
 /// A dead simple Neural Network
 #[derive(Debug)]
 pub struct NeuralNetwork {
-    input_size: usize,
-    output_size: usize,
     hidden_sizes: Vec<usize>,
-    input_weights: Array2<f64>,
-    hidden_weights: Vec<Array2<f64>>,
-    z: Array2<f64>,
-    dz: Array2<f64>,
+    weights: Vec<Array2<f64>>,
+    biases: Vec<Array1<f64>>,
 }
+
 impl NeuralNetwork {
     /// creates a new neural network with given input, output, and hidden sizes
     pub fn new(input_size: usize, output_size: usize, hidden_sizes: Vec<usize>) -> Self {
-        let input_weights = Array::random((input_size, hidden_sizes[0]), Normal::new(0.,1.));
-        let mut hidden_weights = Vec::new();
+        assert!(hidden_sizes.len() >= 1, "Can't have a network without a hidden layer!");
+
+        let mut biases = Vec::new();
+        let mut weights = vec![Array::random((input_size, hidden_sizes[0]), Uniform::new(0.,1.))];
+
         for i in 0..hidden_sizes.len() {
+            biases.push(Array::random(hidden_sizes[i], Uniform::new(0.,1.)));
             let cols = if i == hidden_sizes.len() - 1 {
                 output_size
             } else {
                 hidden_sizes[i + 1]
             };
-            let hidden_weight = Array::random((hidden_sizes[i], cols), Normal::new(0.,1.));
-            hidden_weights.push(hidden_weight);
+            weights.push(Array::random((hidden_sizes[i], cols), Uniform::new(0.,1.)));
         }
+
         Self {
-            input_size,
-            output_size,
             hidden_sizes,
-            hidden_weights,
-            z: input_weights.clone(),
-            dz: input_weights.clone(),
-            input_weights,
+            biases,
+            weights,
         }
     }
 
-    /// Forward propagation through the network
-    pub fn forward(&mut self, xs: &Array2<f64>) -> Array2<f64> {
-        let z = xs.dot(&self.input_weights);
-        self.z = sigmoid(&z);
-        let z = self.z.dot(&self.hidden_weights[0]);
-        sigmoid(&z)
+    pub fn forward(&self, xs: &Array2<f64>) -> Vec<Array2<f64>> {
+        let mut activations = Vec::new(); 
+        let mut input = xs.clone();
+        for each in self.weights.iter() {
+            let d = input.dot(each);
+            input = sigmoid(&d);
+            activations.push(input.clone());
+        }
+        activations
     }
-    /// Backward propagation through the network
-    pub fn backward(&mut self, xs: &Array2<f64>, ys: &Array2<f64>, o: &Array2<f64>) {
-        let o_error = ys - o;
-        let o_delta = o_error * sigmoid_prime(o);
-        let z = o_delta.dot(&self.hidden_weights[0].t());
-        self.dz = z * sigmoid_prime(&self.z);
-        self.input_weights += &(xs.t().dot(&self.dz));
-        self.hidden_weights[0] += &(self.z.t().dot(&o_delta));
+
+
+    pub fn predict(&self, xs: &Array2<f64>) -> Array2<f64> {
+        let mut input = xs.clone();
+        for each in self.weights.iter() {
+            let d = input.dot(each);
+            input = sigmoid(&d);
+        }
+        input
     }
-    /// Train the network with the given input, output n number of times
-    pub fn train(&mut self, xs: &Array2<f64>, ys: &Array2<f64>, n: usize) -> Array2<f64> {
-        let mut o = Array::zeros(ys.raw_dim());
+
+    // Backward propagation through the network
+    pub fn backward(&mut self, xs: &Array2<f64>, ys: &Array2<f64>, activations: &Vec<Array2<f64>>) {
+        let o = activations.last().expect("Forward feed produced no output!");
+        let mut error = ys - o;
+        for (i,each) in self.weights.iter_mut().enumerate().rev() {
+            let delta = error * sigmoid_prime(o);
+            error = delta.dot(&each.t());
+            let z = if i > 0 {
+                &activations[i-1]
+            } else {
+                xs
+            };
+            *each += &(z.t().dot(&delta));
+        }
+    }
+    // Train the network with the given input, output n number of times
+    pub fn train(&mut self, xs: &Array2<f64>, ys: &Array2<f64>, n: usize) {
         let mut pb = ProgressBar::new(n as u64);
         pb.format("[=>-]");
         for _ in 0..n {
-            o = self.forward(xs);
+            let activations = self.forward(xs);
             pb.inc();
-            self.backward(xs, ys, &o);
+            self.backward(xs, ys, &activations);
         }
-        o
     }
 }
+
+use std::fmt;
+
+impl fmt::Display for NeuralNetwork {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut out = String::new();
+        for i in 0..self.biases.len() {
+            out = format!("{}Weight:\n{}\nBias:\n{}\n", out, self.weights[i], self.biases[i]);
+        }
+        out = format!("{}Weight:\n{}", out, self.weights.last().unwrap());
+        write!(f, "{}", out)
+    }
+}
+
 /// Loops through the Array and calculates sigmoid of each value.
 ///
 /// _Note: Since taking the sigmoid of each value in the matrix requires it to be converted
@@ -126,7 +154,7 @@ pub fn find_max<T: Default + std::cmp::PartialOrd + Copy>(array: &Array2<T>) -> 
 }
 
 /// Divides each value in the array with the given max value
-pub fn normaize_val<T>(max: Vec<T>, array: &mut Array2<T>)
+pub fn normalize_val<T>(max: &Vec<T>, array: &mut Array2<T>)
 where
 T: Copy + Default + std::cmp::PartialOrd + std::ops::Div + std::convert::From<f64>,
 f64: std::convert::From<T>,
@@ -134,6 +162,18 @@ f64: std::convert::From<T>,
     let width = array.shape()[1];
     for (i,each) in array.iter_mut().enumerate() {
         *each = T::from(f64::from(*each) / f64::from(max[i % width]))
+    }
+}
+
+/// Divides each value in the array with the given max value
+pub fn denormalize_val<T>(max: &Vec<T>, array: &mut Array2<T>)
+where
+T: Copy + Default + std::cmp::PartialOrd + std::ops::Div + std::convert::From<f64>,
+f64: std::convert::From<T>,
+{
+    let width = array.shape()[1];
+    for (i,each) in array.iter_mut().enumerate() {
+        *each = T::from(f64::from(*each) * f64::from(max[i % width]))
     }
 }
 
